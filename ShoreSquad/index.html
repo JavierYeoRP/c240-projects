@@ -7,6 +7,8 @@
     <meta name="theme-color" content="#0B7FB8">
     <title>ShoreSquad - Beach Cleanup Community</title>
     <link rel="stylesheet" href="css/styles.css">
+    <!-- Google Maps API -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,marker"></script>
 </head>
 <body>
     <!-- Navigation -->
@@ -90,10 +92,15 @@
     <section id="map" class="map-section">
         <h2>Find Beaches Near You</h2>
         <div class="map-container">
-            <div id="map-placeholder" class="map-placeholder" role="region" aria-label="Interactive map of beaches">
-                <p>Map will load here</p>
-                <small>Powered by location services</small>
+            <div id="google-map" class="google-map" role="region" aria-label="Interactive map of beaches"></div>
+            <div class="map-controls">
+                <button id="recenter-btn" class="map-btn" aria-label="Recenter map to current location">📍 My Location</button>
+                <button id="clear-markers-btn" class="map-btn" aria-label="Clear all beach markers">Clear Markers</button>
             </div>
+        </div>
+        <div class="nearby-beaches" id="nearby-beaches">
+            <h3>Nearby Beaches</h3>
+            <ul id="beaches-list" class="beaches-list"></ul>
         </div>
     </section>
 

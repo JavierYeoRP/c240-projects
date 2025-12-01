@@ -17,8 +17,48 @@ const appState = {
         beaches: []
     },
     upcomingEvents: [],
-    weatherData: null
+    weatherData: null,
+    map: null,
+    markers: [],
+    beaches: [],
+    mapReady: false
 };
+
+// Sample beaches with cleanup impact
+const SAMPLE_BEACHES = [
+    { 
+        name: 'Surfer\'s Paradise Beach', 
+        lat: 28.0174, 
+        lng: -82.4241, 
+        debris: 'High', 
+        lastCleanup: '2 weeks ago',
+        priority: 'high'
+    },
+    { 
+        name: 'Coral Cove', 
+        lat: 28.0342, 
+        lng: -82.4301, 
+        debris: 'Medium', 
+        lastCleanup: '1 month ago',
+        priority: 'medium'
+    },
+    { 
+        name: 'Turtle Sanctuary Beach', 
+        lat: 28.0087, 
+        lng: -82.4156, 
+        debris: 'Low', 
+        lastCleanup: '1 week ago',
+        priority: 'low'
+    },
+    { 
+        name: 'Sunset Bay', 
+        lat: 28.0523, 
+        lng: -82.4432, 
+        debris: 'High', 
+        lastCleanup: '3 weeks ago',
+        priority: 'high'
+    }
+];
 
 // ====================================
 // INITIALIZATION
@@ -34,8 +74,13 @@ function initializeApp() {
     requestUserLocation();
     updateCrewStats();
     loadWeatherData();
-    initializeMap();
     setupMobileNav();
+    // Wait for Google Maps API to load before initializing map
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeGoogleMap);
+    } else {
+        initializeGoogleMap();
+    }
 }
 
 // ====================================
@@ -67,6 +112,17 @@ function setupEventListeners() {
             closeMobileNav();
         });
     });
+
+    // Map controls
+    const recenterBtn = document.getElementById('recenter-btn');
+    if (recenterBtn) {
+        recenterBtn.addEventListener('click', recenterMap);
+    }
+
+    const clearMarkersBtn = document.getElementById('clear-markers-btn');
+    if (clearMarkersBtn) {
+        clearMarkersBtn.addEventListener('click', clearAllMarkers);
+    }
 }
 
 function setupMobileNav() {
@@ -145,40 +201,212 @@ function requestUserLocation() {
 }
 
 // ====================================
-// MAP INTEGRATION
+// GOOGLE MAPS INTEGRATION
 // ====================================
 
-function initializeMap() {
-    const mapPlaceholder = document.getElementById('map-placeholder');
-    if (!mapPlaceholder) return;
+function initializeGoogleMap() {
+    const mapElement = document.getElementById('google-map');
+    if (!mapElement) {
+        console.warn('Map container not found');
+        return;
+    }
 
-    // Future: Replace with actual map library (Leaflet, Mapbox, Google Maps)
-    // For now, show placeholder with instructions
-    mapPlaceholder.innerHTML = `
-        <div style="text-align: center;">
-            <h3 style="margin-bottom: 1rem;">🗺️ Interactive Beach Map</h3>
-            <p>Integration ready for:</p>
-            <ul style="list-style: none; padding: 1rem; text-align: left; display: inline-block;">
-                <li>✓ Leaflet.js (Open source)</li>
-                <li>✓ Mapbox GL (Premium features)</li>
-                <li>✓ Google Maps API</li>
-            </ul>
-            <p style="margin-top: 1rem; font-size: 12px; color: #8B8B8B;">
-                Location: ${appState.userLocation ? 
-                    `${appState.userLocation.latitude.toFixed(2)}, ${appState.userLocation.longitude.toFixed(2)}` : 
-                    'Searching...'}
-            </p>
-        </div>
-    `;
+    // Check if Google Maps API is loaded
+    if (typeof google === 'undefined' || !google.maps) {
+        console.warn('Google Maps API not loaded yet');
+        showNotification('Maps API loading... please wait', 'info');
+        setTimeout(initializeGoogleMap, 1000);
+        return;
+    }
+
+    // Default location (Tampa, Florida)
+    const defaultLocation = { lat: 27.9506, lng: -82.4572 };
+    const userLocation = appState.userLocation ? 
+        { lat: appState.userLocation.latitude, lng: appState.userLocation.longitude } :
+        defaultLocation;
+
+    // Create map
+    appState.map = new google.maps.Map(mapElement, {
+        zoom: 12,
+        center: userLocation,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        styles: getMapStyle()
+    });
+
+    appState.mapReady = true;
+    console.log('Google Map initialized at', userLocation);
+
+    // Add user location marker
+    addUserMarker(userLocation);
+
+    // Load sample beaches
+    addBeachMarkers();
+
+    // Listen for map clicks
+    appState.map.addListener('click', handleMapClick);
+}
+
+function addUserMarker(location) {
+    if (!appState.map) return;
+
+    const userMarker = new google.maps.Marker({
+        position: location,
+        map: appState.map,
+        title: 'Your Location',
+        icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+    });
+
+    const userInfoWindow = new google.maps.InfoWindow({
+        content: '<div><strong>📍 You are here</strong><p>Your current location</p></div>'
+    });
+
+    userMarker.addListener('click', () => {
+        userInfoWindow.open(appState.map, userMarker);
+    });
+
+    appState.markers.push(userMarker);
+}
+
+function addBeachMarkers() {
+    if (!appState.map) return;
+
+    SAMPLE_BEACHES.forEach((beach) => {
+        const markerColor = getMarkerColor(beach.priority);
+        
+        const marker = new google.maps.Marker({
+            position: { lat: beach.lat, lng: beach.lng },
+            map: appState.map,
+            title: beach.name,
+            icon: markerColor
+        });
+
+        const infoWindowContent = `
+            <div style="font-family: Arial; width: 200px;">
+                <h3 style="margin: 0 0 0.5rem 0; color: #0B7FB8;">${beach.name}</h3>
+                <p style="margin: 0.25rem 0;"><strong>Debris Level:</strong> ${beach.debris}</p>
+                <p style="margin: 0.25rem 0;"><strong>Last Cleanup:</strong> ${beach.lastCleanup}</p>
+                <button onclick="selectBeachForCleanup('${beach.name}')" 
+                        style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: #17B89A; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Plan Cleanup
+                </button>
+            </div>
+        `;
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: infoWindowContent
+        });
+
+        marker.addListener('click', () => {
+            closeAllInfoWindows();
+            infoWindow.open(appState.map, marker);
+        });
+
+        beach.marker = marker;
+        beach.infoWindow = infoWindow;
+        appState.beaches.push(beach);
+        appState.markers.push(marker);
+    });
+
+    updateBeachesList();
+    console.log('Beach markers added:', SAMPLE_BEACHES.length);
+}
+
+function getMarkerColor(priority) {
+    const colors = {
+        'high': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+        'medium': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+        'low': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+    };
+    return colors[priority] || colors.medium;
+}
+
+function getMapStyle() {
+    return [
+        {
+            featureType: 'water',
+            elementType: 'geometry.fill',
+            stylers: [{ color: '#a2daf6' }]
+        },
+        {
+            featureType: 'road',
+            elementType: 'geometry.fill',
+            stylers: [{ color: '#f3f3f3' }]
+        },
+        {
+            featureType: 'landscape',
+            elementType: 'geometry.fill',
+            stylers: [{ color: '#e8f8f5' }]
+        }
+    ];
+}
+
+function recenterMap() {
+    if (!appState.map || !appState.userLocation) return;
+
+    const userLocation = {
+        lat: appState.userLocation.latitude,
+        lng: appState.userLocation.longitude
+    };
+
+    appState.map.setCenter(userLocation);
+    appState.map.setZoom(12);
+    showNotification('Map recentered to your location', 'success');
+}
+
+function clearAllMarkers() {
+    appState.markers.forEach(marker => marker.setMap(null));
+    appState.markers = [];
+    appState.beaches = [];
+    updateBeachesList();
+    showNotification('All markers cleared', 'info');
+}
+
+function closeAllInfoWindows() {
+    appState.beaches.forEach(beach => {
+        if (beach.infoWindow) {
+            beach.infoWindow.close();
+        }
+    });
+}
+
+function handleMapClick(event) {
+    console.log('Map clicked at:', event.latLng.lat(), event.latLng.lng());
+    // Placeholder for future beach suggestion logic
 }
 
 function updateMapWithLocation() {
-    if (!appState.userLocation) return;
+    if (!appState.userLocation || !appState.mapReady) return;
     
-    const mapPlaceholder = document.getElementById('map-placeholder');
-    if (mapPlaceholder) {
-        mapPlaceholder.style.animation = 'pulse 0.5s ease';
-        console.log('Map updated with location');
+    console.log('Map updated with location:', appState.userLocation);
+    recenterMap();
+}
+
+function updateBeachesList() {
+    const beachesList = document.getElementById('beaches-list');
+    if (!beachesList) return;
+
+    if (appState.beaches.length === 0) {
+        beachesList.innerHTML = '<li>No beaches in view</li>';
+        return;
+    }
+
+    beachesList.innerHTML = appState.beaches.map(beach => `
+        <li class="beach-item" data-beach="${beach.name}">
+            <strong>${beach.name}</strong>
+            <div class="beach-info">
+                <span class="debris-badge ${beach.priority}">${beach.debris}</span>
+                <span class="cleanup-time">${beach.lastCleanup}</span>
+            </div>
+            <button onclick="selectBeachForCleanup('${beach.name}')" class="beach-btn">Plan Cleanup</button>
+        </li>
+    `).join('');
+}
+
+function selectBeachForCleanup(beachName) {
+    const beach = appState.beaches.find(b => b.name === beachName);
+    if (beach) {
+        handleStartCleanup(beachName);
+        if (beach.infoWindow) beach.infoWindow.close();
     }
 }
 
@@ -222,13 +450,14 @@ function getWeatherIcon(condition) {
 // CREW MANAGEMENT
 // ====================================
 
-function handleStartCleanup() {
-    const eventName = prompt('Name your cleanup event:');
+function handleStartCleanup(beachName = null) {
+    const eventName = beachName || prompt('Name your cleanup event:');
     if (!eventName) return;
 
     const newEvent = {
         id: Date.now(),
         name: eventName,
+        beach: beachName || 'TBD',
         date: new Date().toISOString(),
         members: 1,
         impact: 0,
@@ -238,8 +467,12 @@ function handleStartCleanup() {
     appState.upcomingEvents.push(newEvent);
     appState.crew.cleanups++;
     
+    if (beachName && !appState.crew.beaches.includes(beachName)) {
+        appState.crew.beaches.push(beachName);
+    }
+    
     updateCrewStats();
-    showNotification(`🎉 "${eventName}" created! Invite your crew!`, 'success');
+    showNotification(`🎉 "${eventName}" cleanup planned! Invite your crew!`, 'success');
     
     console.log('New cleanup event:', newEvent);
 }
