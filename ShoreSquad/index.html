@@ -7,8 +7,9 @@
     <meta name="theme-color" content="#0B7FB8">
     <title>ShoreSquad - Beach Cleanup Community</title>
     <link rel="stylesheet" href="css/styles.css">
-    <!-- Google Maps API -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,marker"></script>
+    <!-- Leaflet Map Library (OpenStreetMap) - Free Alternative to Google Maps -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
     <!-- Navigation -->
@@ -91,12 +92,13 @@
     <!-- Map Section -->
     <section id="map" class="map-section">
         <h2>Find Beaches Near You</h2>
+        <div class="map-controls">
+            <button id="recenter-btn" class="map-btn" aria-label="Recenter map to current location">📍 My Location</button>
+            <button id="clear-markers-btn" class="map-btn" aria-label="Clear all beach markers">🗑️ Clear Markers</button>
+            <input type="range" id="zoom-slider" class="zoom-slider" min="3" max="18" value="12" aria-label="Map zoom level">
+        </div>
         <div class="map-container">
-            <div id="google-map" class="google-map" role="region" aria-label="Interactive map of beaches"></div>
-            <div class="map-controls">
-                <button id="recenter-btn" class="map-btn" aria-label="Recenter map to current location">📍 My Location</button>
-                <button id="clear-markers-btn" class="map-btn" aria-label="Clear all beach markers">Clear Markers</button>
-            </div>
+            <div id="leaflet-map" class="leaflet-map" role="region" aria-label="Interactive map of beaches"></div>
         </div>
         <div class="nearby-beaches" id="nearby-beaches">
             <h3>Nearby Beaches</h3>
